@@ -1,173 +1,159 @@
-import { For, Show, createSignal, createEffect } from "solid-js";
-import { tree, focusId, setFocusId } from "./store";
+import { For, Show } from "solid-js";
 import {
- addChild,
- addSibling,
- removeNode,
- updateText,
- updateNote,
- toggleCompleted,
- toggleCollapsed,
- zoomInto,
- moveUp,
- moveDown,
- indent,
- outdent,
+  tree,
+  openNoteId,
+  setOpenNoteId,
+  dragId,
+  setDragId,
+  dropTarget,
+  setDropTarget,
+  type NodeId,
+} from "./store";
+import {
+  updateText,
+  updateNote,
+  setCollapsed,
+  zoomInto,
+  isDescendant,
+  dropNode,
+  endDrag,
 } from "./actions";
-import type { NodeId } from "./store";
+import { textKeyDown, textPaste, noteKeyDown } from "./keys";
+import AutoTextarea from "./AutoTextarea";
 
-export default function NodeRow(props: { nodeId: NodeId; depth: number }) {
- const node = () => tree()[props.nodeId];
- const [showNote, setShowNote] = createSignal(false);
+export default function NodeRow(props: { nodeId: NodeId }) {
+  const node = () => tree[props.nodeId];
+  const hasChildren = () => node().children.length > 0;
+  const expanded = () => hasChildren() && !node().collapsed;
+  const drop = () => {
+    const d = dropTarget();
+    return d && d.id === props.nodeId ? d.pos : null;
+  };
 
- let inputRef: HTMLInputElement | undefined;
+  let row!: HTMLDivElement;
 
- createEffect(() => {
- if (focusId() === props.nodeId && inputRef) {
- inputRef.focus();
- const len = inputRef.value.length;
- inputRef.setSelectionRange(len, len);
- setFocusId(null);
- }
- });
+  const onDragOver = (e: DragEvent) => {
+    const dragged = dragId();
+    if (!dragged) return;
+    if (dragged === props.nodeId || isDescendant(props.nodeId, dragged)) {
+      setDropTarget(null);
+      return;
+    }
+    e.preventDefault();
+    const r = row.getBoundingClientRect();
+    const upper = e.clientY - r.top < r.height / 2;
+    // Dragging to the right of the bullet nests; so does the lower half of an open parent.
+    const nest = !upper && (e.clientX - r.left > 44 || expanded());
+    setDropTarget({
+      id: props.nodeId,
+      pos: upper ? "before" : nest ? "child" : "after",
+    });
+  };
 
- const handleKey = (e: KeyboardEvent) => {
- const t = e.currentTarget as HTMLInputElement;
- switch (e.key) {
- case "Enter":
- e.preventDefault();
- if (e.shiftKey) {
- setShowNote(true);
- } else {
- const id = addSibling(props.nodeId);
- if (id) setFocusId(id);
- }
- break;
- case "Backspace":
- if (t.value === "") {
- e.preventDefault();
- const parent = node().parentId;
- removeNode(props.nodeId);
- if (parent) setFocusId(parent);
- }
- break;
- case "Tab":
- e.preventDefault();
- if (e.shiftKey) outdent(props.nodeId);
- else indent(props.nodeId);
- break;
- case "ArrowUp":
- if (e.altKey) {
- e.preventDefault();
- moveUp(props.nodeId);
- }
- break;
- case "ArrowDown":
- if (e.altKey) {
- e.preventDefault();
- moveDown(props.nodeId);
- }
- break;
- case " ":
- if (t.selectionStart === 0 && t.selectionEnd === 0) {
- e.preventDefault();
- toggleCompleted(props.nodeId);
- }
- break;
- }
- };
+  return (
+    <div class={dragId() === props.nodeId ? "opacity-40" : ""}>
+      <div
+        ref={row}
+        class="group relative flex items-start"
+        onDragOver={onDragOver}
+        onDrop={(e) => {
+          const dragged = dragId();
+          const d = dropTarget();
+          if (!dragged || !d) return;
+          e.preventDefault();
+          dropNode(dragged, d.id, d.pos);
+        }}
+      >
+        <Show when={hasChildren()}>
+          <button
+            tabindex={-1}
+            title={node().collapsed ? "Expand" : "Collapse"}
+            class="absolute -left-5 top-0 flex h-7 w-5 items-center justify-center text-gray-400 opacity-0 transition-opacity hover:text-gray-700 group-hover:opacity-100"
+            onClick={() => setCollapsed(props.nodeId, !node().collapsed)}
+          >
+            <svg
+              viewBox="0 0 10 10"
+              class="h-2.5 w-2.5 transition-transform duration-150"
+              classList={{ "rotate-90": !node().collapsed }}
+            >
+              <path d="M3 1l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" />
+            </svg>
+          </button>
+        </Show>
 
- const addChildAndFocus = () => {
- const id = addChild(props.nodeId);
- toggleCollapsedAt();
- setFocusId(id);
- };
+        <div
+          draggable={true}
+          title="Click to zoom, drag to move"
+          class="flex h-7 w-5 shrink-0 cursor-pointer items-center justify-center"
+          onClick={() => zoomInto(props.nodeId)}
+          onDragStart={(e) => {
+            e.dataTransfer!.effectAllowed = "move";
+            e.dataTransfer!.setData("text/plain", props.nodeId);
+            e.dataTransfer!.setDragImage(row, 0, 0);
+            setDragId(props.nodeId);
+          }}
+          onDragEnd={endDrag}
+        >
+          <span
+            class="flex h-[18px] w-[18px] items-center justify-center rounded-full transition-colors hover:bg-gray-200"
+            classList={{ "bg-gray-200": node().collapsed && hasChildren() }}
+          >
+            <span
+              class="h-[6px] w-[6px] rounded-full transition-transform group-hover:scale-125"
+              classList={{
+                "bg-gray-500": !node().completed,
+                "bg-gray-300": node().completed,
+              }}
+            />
+          </span>
+        </div>
 
- const toggleCollapsedAt = () => {
- toggleCollapsed(props.nodeId);
- };
+        <div class="min-w-0 flex-1">
+          <AutoTextarea
+            nodeId={props.nodeId}
+            field="text"
+            value={node().text}
+            class={`py-0 text-[15px] leading-7 ${node().completed ? "text-gray-400 line-through" : ""}`}
+            onInput={(v) => updateText(props.nodeId, v)}
+            onKeyDown={(e) => textKeyDown(props.nodeId, e)}
+            onPaste={(e) => textPaste(props.nodeId, e)}
+          />
+          <Show when={node().note !== "" || openNoteId() === props.nodeId}>
+            <AutoTextarea
+              nodeId={props.nodeId}
+              field="note"
+              value={node().note}
+              class="pb-1 text-sm leading-5 text-gray-500"
+              placeholder="Add a description"
+              onInput={(v) => updateNote(props.nodeId, v)}
+              onKeyDown={(e) => noteKeyDown(props.nodeId, e)}
+              onBlur={() => {
+                if (node()?.note === "" && openNoteId() === props.nodeId)
+                  setOpenNoteId(null);
+              }}
+            />
+          </Show>
+        </div>
 
- return (
- <div class="group">
- <div
- class="flex items-start gap-1 py-0.5"
- style={{ "padding-left": `${props.depth * 1.25}rem` }}
- >
- <div class="relative pt-1.5 shrink-0">
- <button
- title={node().children.length ? "Zoom" : "Toggle done"}
- onClick={() =>
- node().children.length ? toggleCollapsedAt() : toggleCompleted(props.nodeId)
- }
- class="block"
- >
- <span
- class="block w-2.5 h-2.5 rounded-full border border-gray-400 hover:bg-gray-200"
- classList={{ "bg-gray-500": node().completed }}
- />
- </button>
- </div>
+        <Show when={drop()}>
+          {(pos) => (
+            <div
+              class="pointer-events-none absolute right-0 h-0.5 rounded bg-blue-500"
+              classList={{
+                "top-0": pos() === "before",
+                "bottom-0": pos() !== "before",
+              }}
+              style={{ left: pos() === "child" ? "2.75rem" : "1.25rem" }}
+            />
+          )}
+        </Show>
+      </div>
 
- <div class="flex-1">
- <input
- ref={inputRef}
- class="w-full bg-transparent outline-none py-0.5"
- classList={{
- "line-through text-gray-400": node().completed,
- "text-gray-500": !node().collapsed && node().children.length > 0,
- }}
- value={node().text}
- placeholder=" "
- onKeyDown={handleKey}
- onInput={(e) => updateText(props.nodeId, e.currentTarget.value)}
- />
- <Show when={showNote() || node().note}>
- <textarea
- class="text-xs text-gray-600 w-full bg-gray-50 rounded p-1 mt-1 outline-none resize-none"
- rows={2}
- placeholder="Node note"
- value={node().note}
- onInput={(e) => updateNote(props.nodeId, e.currentTarget.value)}
- />
- </Show>
- </div>
-
- <div class="pt-0.5 opacity-0 group-hover:opacity-100 transition shrink-0 flex gap-1">
- <Show when={node().children.length > 0}>
- <button
- title="Zoom in"
- class="text-xs text-gray-400 hover:text-gray-800"
- onClick={() => zoomInto(props.nodeId)}
- >
- ⊞
- </button>
- </Show>
- <button
- title="Add child"
- class="text-xs text-gray-400 hover:text-gray-800"
- onClick={addChildAndFocus}
- >
- ＋
- </button>
- <button
- title="Delete"
- class="text-xs text-gray-400 hover:text-red-600"
- onClick={() => {
- const parent = node().parentId;
- removeNode(props.nodeId);
- if (parent) setFocusId(parent);
- }}
- >
- ×
- </button>
- </div>
- </div>
-
- <Show when={!node().collapsed}>
- <For each={node().children}>
- {(cid) => <NodeRow nodeId={cid} depth={props.depth + 1} />}
- </For>
- </Show>
- </div>
- );
+      <Show when={expanded()}>
+        <div class="ml-[9px] border-l border-gray-200 pl-[10px]">
+          <For each={node().children}>{(cid) => <NodeRow nodeId={cid} />}</For>
+        </div>
+      </Show>
+    </div>
+  );
 }
