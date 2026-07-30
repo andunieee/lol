@@ -1,5 +1,5 @@
 import { createEffect, onCleanup, onMount } from "solid-js";
-import { focusReq, setFocusReq, type NodeId } from "./store";
+import { focusReq, setFocusReq, setActive, type NodeId } from "./store";
 
 /**
  * A borderless textarea that grows with its content and claims focus
@@ -69,6 +69,7 @@ export default function AutoTextarea(props: {
       }}
       onKeyDown={props.onKeyDown}
       onPaste={props.onPaste}
+      onFocus={() => setActive({ id: props.nodeId, field: props.field })}
       onBlur={props.onBlur}
     />
   );

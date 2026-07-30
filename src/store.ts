@@ -54,7 +54,7 @@ function seed(): Tree {
 
   const projects = add("Projects", ROOT);
   add(
-    "Finish nflowy",
+    "Finish lol",
     projects,
     "Shift+Enter edits this description. Drag a bullet to move it, click one to zoom.",
   );
@@ -93,6 +93,16 @@ const [dropTarget, setDropTarget] = createSignal<{
   pos: DropPos;
 } | null>(null);
 
+/** The text field the user last edited; survives blur so the touch bar can act on it. */
+const [active, setActive] = createSignal<{
+  id: NodeId;
+  field: "text" | "note";
+} | null>(null);
+
+/** Touch selection mode: tapping rows toggles them instead of editing. */
+const [selecting, setSelecting] = createSignal(false);
+const [selected, setSelected] = createSignal<NodeId[]>([]);
+
 export {
   tree,
   setTree,
@@ -106,5 +116,11 @@ export {
   setDragId,
   dropTarget,
   setDropTarget,
+  active,
+  setActive,
+  selecting,
+  setSelecting,
+  selected,
+  setSelected,
   newId,
 };

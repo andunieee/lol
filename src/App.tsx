@@ -1,5 +1,5 @@
 import { For, Show, createMemo, onCleanup, onMount } from "solid-js";
-import { tree, rootId, requestFocus, ROOT } from "./store";
+import { tree, rootId, requestFocus, selecting, ROOT } from "./store";
 import {
   updateText,
   updateNote,
@@ -11,6 +11,8 @@ import {
 import { titleKeyDown, noteKeyDown } from "./keys";
 import AutoTextarea from "./AutoTextarea";
 import NodeRow from "./NodeRow";
+import TouchBar from "./TouchBar";
+import { isTouch } from "./touch";
 
 export default function App() {
   const childIds = createMemo(() => tree[rootId()].children);
@@ -38,6 +40,7 @@ export default function App() {
   });
 
   const focusEnd = () => {
+    if (selecting()) return;
     const last = visibleOrder().at(-1);
     if (last) requestFocus(last, "text", "end");
   };
@@ -46,7 +49,7 @@ export default function App() {
     <div class="mx-auto min-h-full max-w-3xl px-6 pb-24 pt-10">
       <Show
         when={zoomed()}
-        fallback={<h1 class="mb-5 pl-5 text-2xl font-semibold">nflowy</h1>}
+        fallback={<h1 class="mb-5 pl-5 text-2xl font-semibold">lol</h1>}
       >
         <nav class="mb-4 flex flex-wrap items-center gap-1 pl-5 text-sm text-gray-500">
           <button class="rounded px-1.5 py-0.5 hover:bg-gray-100" onClick={() => zoomTo(ROOT)}>
@@ -96,7 +99,11 @@ export default function App() {
       {/* Clicking the empty space below the list continues the last item. */}
       <div class="min-h-[40vh] cursor-text" onClick={focusEnd} />
 
-      <p class="mt-8 pl-5 text-xs leading-6 text-gray-400">
+      <Show when={isTouch()}>
+        <TouchBar />
+      </Show>
+
+      <p class="mt-8 pl-5 text-xs leading-6 text-gray-400" classList={{ hidden: isTouch() }}>
         Enter new item · Tab / ⇧Tab indent · ⇧Enter description · ⌘/Ctrl+Enter complete ·
         ⌘/Ctrl+↑↓ collapse / expand · ⌘/Ctrl+⇧+↑↓ move · Alt+→ / Alt+← zoom · drag bullets to reorder
       </p>

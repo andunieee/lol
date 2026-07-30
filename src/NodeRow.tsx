@@ -7,6 +7,8 @@ import {
   setDragId,
   dropTarget,
   setDropTarget,
+  selecting,
+  selected,
   type NodeId,
 } from "./store";
 import {
@@ -17,7 +19,9 @@ import {
   isDescendant,
   dropNode,
   endDrag,
+  toggleSelected,
 } from "./actions";
+import { isTouch } from "./touch";
 import { textKeyDown, textPaste, noteKeyDown } from "./keys";
 import AutoTextarea from "./AutoTextarea";
 
@@ -54,7 +58,8 @@ export default function NodeRow(props: { nodeId: NodeId }) {
     <div class={dragId() === props.nodeId ? "opacity-40" : ""}>
       <div
         ref={row}
-        class="group relative flex items-start"
+        class="group relative flex items-start rounded"
+        classList={{ "bg-blue-100": selected().includes(props.nodeId) }}
         onDragOver={onDragOver}
         onDrop={(e) => {
           const dragged = dragId();
@@ -68,7 +73,8 @@ export default function NodeRow(props: { nodeId: NodeId }) {
           <button
             tabindex={-1}
             title={node().collapsed ? "Expand" : "Collapse"}
-            class="absolute -left-5 top-0 flex h-7 w-5 items-center justify-center text-gray-400 opacity-0 transition-opacity hover:text-gray-700 group-hover:opacity-100"
+            class="absolute -left-5 top-0 flex h-7 w-5 items-center justify-center text-gray-400 transition-opacity hover:text-gray-700"
+            classList={{ "opacity-0 group-hover:opacity-100": !isTouch() }}
             onClick={() => setCollapsed(props.nodeId, !node().collapsed)}
           >
             <svg
@@ -134,6 +140,14 @@ export default function NodeRow(props: { nodeId: NodeId }) {
             />
           </Show>
         </div>
+
+        {/* In select mode the whole row is one tap target. */}
+        <Show when={selecting()}>
+          <div
+            class="absolute inset-0 z-10"
+            onClick={() => toggleSelected(props.nodeId)}
+          />
+        </Show>
 
         <Show when={drop()}>
           {(pos) => (

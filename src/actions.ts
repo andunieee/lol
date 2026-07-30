@@ -10,6 +10,7 @@ import {
   requestFocus,
   setDragId,
   setDropTarget,
+  setSelected,
   ROOT,
   type NodeId,
   type DropPos,
@@ -259,6 +260,61 @@ export function moveDown(id: NodeId): void {
     const gp = tree[parent].parentId!;
     moveNode(id, gp, tree[gp].children.indexOf(parent) + 1);
   }
+}
+
+/* ---------- multi-item moves (touch bar) ---------- */
+
+export const toggleSelected = (id: NodeId) =>
+  setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+/** Existing ids in document order, minus those carried along by a listed ancestor. */
+function outermost(ids: NodeId[]): NodeId[] {
+  const set = new Set(ids.filter((id) => tree[id]));
+  const out: NodeId[] = [];
+  const walk = (id: NodeId) => {
+    for (const c of tree[id].children) {
+      if (set.has(c)) out.push(c);
+      else walk(c);
+    }
+  };
+  walk(ROOT);
+  return out;
+}
+
+/** Move items up/down among their siblings, never leaving their level. */
+export function shiftMany(ids: NodeId[], dir: -1 | 1): void {
+  const items = outermost(ids);
+  if (dir > 0) items.reverse();
+  const stuck = new Set<NodeId>();
+  batch(() => {
+    for (const id of items) {
+      const parent = tree[id].parentId!;
+      const sibs = tree[parent].children;
+      const j = sibs.indexOf(id) + dir;
+      if (j < 0 || j >= sibs.length || stuck.has(sibs[j])) stuck.add(id);
+      else moveNode(id, parent, dir < 0 ? j : j + 1);
+    }
+  });
+}
+
+/** Nest each item under the sibling above it, keeping selected runs together. */
+export function indentMany(ids: NodeId[]): void {
+  const stuck = new Set<NodeId>();
+  batch(() => {
+    for (const id of outermost(ids)) {
+      const sibs = tree[tree[id].parentId!].children;
+      const i = sibs.indexOf(id);
+      if (i === 0 || stuck.has(sibs[i - 1])) stuck.add(id);
+      else indent(id);
+    }
+  });
+}
+
+/** Move each item out to its parent's level; bottom-up so runs keep their order. */
+export function outdentMany(ids: NodeId[]): void {
+  batch(() => {
+    for (const id of outermost(ids).reverse()) outdent(id);
+  });
 }
 
 /* ---------- zoom ---------- */

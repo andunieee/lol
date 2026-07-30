@@ -1,7 +1,7 @@
 {
-  "name": "nflowy",
+  "name": "lol",
   "version": "0.1.0",
-  "description": "A Workflowy clone built with SolidJS, Vite, Tailwind, and TypeScript. Data is kept in memory only.",
+  "description": "Lists of Lists. A Workflowy clone built with SolidJS, Vite, Tailwind, and TypeScript. Data is kept in memory only.",
   "type": "module",
   "scripts": {
     "dev": "vite",
